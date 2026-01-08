@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Five9 Integration - GCP Project Mapper</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.5; }
+        .status-box { padding: 10px; margin-bottom: 20px; border-radius: 4px; border: 1px solid #ccc; }
+        .connected { background-color: #e6fffa; border-color: #38b2ac; }
+        .disconnected { background-color: #fff5f5; border-color: #feb2b2; }
+        button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h2>GCP Integration Dashboard</h2>
+    
+    <div id="connectionStatus" class="status-box disconnected">
+        Status: <strong>Waiting for Five9 Handshake...</strong>
+    </div>
+
+    <p>Current Interaction ID: <span id="displayId">None</span></p>
+
+    <div>
+        <label for="gcpInput">GCP Project ID:</label><br>
+        <input type="text" id="gcpInput" value="lucid-volt-361004" style="width: 250px; padding: 5px; margin: 10px 0;">
+        <br>
+        <button id="saveBtn" onclick="saveToFive9()" disabled>Update Five9 Record</button>
+    </div>
+
+    <script src="https://app.five9.com/dev/sdk/crm/latest/five9.crm.sdk.js"></script>
+
+    <script>
+    console.log("v1.0.1");
+        let currentInteractionId = null;
+        let interactionApi = null;
+
+        if (window.Five9 && window.Five9.CrmSdk) {
+            console.log("SDK Library is loaded.");
+            
+            // Initialize APIs
+            const applicationApi = window.Five9.CrmSdk.applicationApi();
+            interactionApi = window.Five9.CrmSdk.interactionApi();
+
+            // 1. Verify Connectivity (The Handshake)
+            applicationApi.getConfig().then(config => {
+                const statusDiv = document.getElementById('connectionStatus');
+                statusDiv.className = "status-box connected";
+                statusDiv.innerHTML = "Status: <strong>Connected to Five9</strong>";
+                console.log("Connection successful!", config);
+            }).catch(err => {
+                console.error("Handshake failed. Is the 'Desktop Toolkit' tab enabled in Admin?", err);
+            });
+
+            // 2. Automatically capture the ID when a call starts or is selected
+            interactionApi.subscribe({
+                interactionOpened: (data) => {
+                    currentInteractionId = data.interactionId;
+                    document.getElementById('displayId').innerText = currentInteractionId;
+                    document.getElementById('saveBtn').disabled = false;
+                    console.log("Captured Active Call ID:", currentInteractionId);
+                },
+                interactionClosed: () => {
+                    currentInteractionId = null;
+                    document.getElementById('displayId').innerText = "None";
+                    document.getElementById('saveBtn').disabled = true;
+                }
+            });
+        }
+
+        // 3. The function to write to the Five9 Record
+        async function saveToFive9() {
+            if (!currentInteractionId) return;
+
+            const projectId = document.getElementById('gcpInput').value;
+
+            try {
+                await interactionApi.setCav({
+                    interactionId: currentInteractionId,
+                    cavList: [
+                        { name: 'GCP_Project_Id', value: projectId }
+                    ]
+                });
+                alert("Successfully updated Five9 Call Variable!");
+            } catch (err) {
+                console.error("Update failed:", err);
+                alert("Error: Check console. (Does 'GCP_Project_Id' exist in Five9 Admin?)");
+            }
+        }
+    </script>
+</body>
+</html>
